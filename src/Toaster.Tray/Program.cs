@@ -9,11 +9,12 @@ Application.Run(new MainForm());
 
 sealed class MainForm : Form
 {
+    private const string SourceHelp = "Import manuals and research into Toaster. PDFs are extracted page-by-page; scanned/image-heavy pages automatically fall back to local OCR. Text, Markdown, HTML, JSON and source files are sectioned locally.";
     private readonly TextBox _endpoint = new() { ReadOnly = true, Dock = DockStyle.Top };
     private readonly TextBox _config = new() { ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
     private readonly Label _status = new() { Dock = DockStyle.Top, Height = 56, Text = "Checking Toaster service…", Padding = new Padding(8) };
     private readonly CheckBox _queueToasting = new() { Text = "Queue imported manuals for toasting by my connected model/provider", Checked = true, Dock = DockStyle.Top, Height = 34, Padding = new Padding(8, 4, 4, 4) };
-    private readonly Label _sourceNote = new() { Text = "Import manuals and research into Toaster. PDFs are extracted page-by-page; text, Markdown, HTML, JSON and source files are sectioned locally. Scanned/image-only PDFs currently require OCR before import.", Dock = DockStyle.Top, Height = 72, Padding = new Padding(8) };
+    private readonly Label _sourceNote = new() { Text = SourceHelp, Dock = DockStyle.Top, Height = 72, Padding = new Padding(8) };
     private readonly HttpClient _http = new() { BaseAddress = new Uri("http://127.0.0.1:47321"), Timeout = TimeSpan.FromMinutes(10) };
     private readonly NotifyIcon _notify;
     private bool _reallyExit;
@@ -114,7 +115,7 @@ sealed class MainForm : Form
         }
         finally
         {
-            _sourceNote.Text = "Import manuals and research into Toaster. PDFs are extracted page-by-page; text, Markdown, HTML, JSON and source files are sectioned locally. Scanned/image-only PDFs currently require OCR before import.";
+            _sourceNote.Text = SourceHelp;
         }
     }
 
