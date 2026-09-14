@@ -14,14 +14,13 @@ builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 256L * 1024 
 var port = builder.Configuration.GetValue<int?>("Toaster:Port") ?? 47321;
 var configuredPath = builder.Configuration["Toaster:DataPath"] ?? "%LOCALAPPDATA%\\Toaster";
 var dataPath = Environment.ExpandEnvironmentVariables(configuredPath);
-if (configuredPath.Contains("%LOCALAPPDATA%", StringComparison.OrdinalIgnoreCase) && Environment.UserInteractive == false)
+if (configuredPath.Contains("%LOCALAPPDATA%", StringComparison.OrdinalIgnoreCase) && !Environment.UserInteractive)
     dataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Toaster");
 Directory.CreateDirectory(dataPath);
 Directory.CreateDirectory(Path.Combine(dataPath, "sources", "objects"));
 
-var dbPath = Path.Combine(dataPath, "toaster.db");
 builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
-builder.Services.AddSingleton<IKnowledgeStore>(_ => new SqliteKnowledgeStore(dbPath));
+builder.Services.AddSingleton<IKnowledgeStore>(_ => new SqliteKnowledgeStore(Path.Combine(dataPath, "toaster.db")));
 
 var app = builder.Build();
 var store = app.Services.GetRequiredService<IKnowledgeStore>();
@@ -48,29 +47,29 @@ app.MapPost("/api/v1/toast", async (ToastInput i, CancellationToken ct) =>
     var toast = new Toast(Guid.NewGuid(), i.Title, i.Statement, i.Explanation, i.Domains ?? [], i.Tags ?? [], i.Conditions ?? [], i.Exceptions ?? [], Math.Clamp(i.Confidence ?? 0.5, 0, 1), ToastLifecycle.Provisional, now, now);
     return Results.Created($"/api/v1/toast/{toast.Id}", await store.AddToastAsync(toast, ct));
 });
-app.MapGet("/api/v1/toast/{id:guid}", async (Guid id, CancellationToken ct) => (await store.GetToastAsync(id, ct)) is { } t ? Results.Ok(new { toast = t, provenance = await store.GetProvenanceAsync(id, ct) }) : Results.NotFound());
+
+app.MapGet("/api/v1/toast/{id:guid}", async (Guid id, CancellationToken ct) =>
+{
+    var toast = await store.GetToastAsync(id, ct);
+    return toast is null ? Results.NotFound() : Results.Ok(new { toast, provenance = await store.GetProvenanceAsync(id, ct) });
+});
+
 app.MapPost("/api/v1/query", async (QueryRequest q, CancellationToken ct) =>
 {
     var toast = await store.SearchToastAsync(q.Query, q.Limit, ct);
-    var src = await store.SearchSourcesAsync(q.Query, Math.Min(q.Limit, 5), ct);
-    var coverage = Math.Min(1.0, (toast.Count * 0.15) + (src.Count * 0.08));
-    return Results.Ok(new QueryResponse(q.Query, toast, src, coverage));
+    var sources = await store.SearchSourcesAsync(q.Query, Math.Min(q.Limit, 5), ct);
+    return Results.Ok(new QueryResponse(q.Query, toast, sources, Math.Min(1.0, toast.Count * .15 + sources.Count * .08)));
 });
 
 app.MapPost("/api/v1/observations", async (ObservationInput i, CancellationToken ct) =>
 {
     var observation = await store.AddObservationAsync(new Observation(Guid.NewGuid(), i.Activity, i.Attempt, i.Result, i.Resolution, i.EnvironmentJson, DateTimeOffset.UtcNow), ct);
-    ToastingJob? job = null;
-    if (i.QueueForToasting ?? true) job = await QueueObservationJob(observation, store, ct);
+    var job = (i.QueueForToasting ?? true) ? await ToastingCoordinator.QueueObservationJob(observation, store, ct) : null;
     return Results.Created("/api/v1/observations", new { observation, toastingJob = job });
 });
 
 app.MapPost("/api/v1/sources/text", async (TextSourceInput i, CancellationToken ct) =>
-{
-    var bytes = Encoding.UTF8.GetBytes(i.Content);
-    var result = await IngestSource(bytes, i.Title, i.Origin, i.ContentType ?? "text/plain", i.QueueForToasting ?? false, dataPath, store, ct);
-    return result;
-});
+    await IngestSource(Encoding.UTF8.GetBytes(i.Content), i.Title, i.Origin, i.ContentType ?? "text/plain", i.QueueForToasting ?? false, dataPath, store, ct));
 
 app.MapPost("/api/v1/sources/file", async (HttpRequest request, string? fileName, string? title, string? origin, bool? queueToasting, CancellationToken ct) =>
 {
@@ -79,25 +78,26 @@ app.MapPost("/api/v1/sources/file", async (HttpRequest request, string? fileName
     using var ms = new MemoryStream();
     await request.Body.CopyToAsync(ms, ct);
     if (ms.Length == 0) return Results.BadRequest(new { error = "The uploaded file was empty." });
-    var contentType = request.ContentType?.Split(';')[0] ?? GuessContentType(fileName);
-    return await IngestSource(ms.ToArray(), title, origin ?? fileName, contentType, queueToasting ?? false, dataPath, store, ct);
+    return await IngestSource(ms.ToArray(), title, origin ?? fileName, request.ContentType?.Split(';')[0] ?? GuessContentType(fileName), queueToasting ?? false, dataPath, store, ct);
 });
 
-app.MapGet("/api/v1/sources/{id:guid}", async (Guid id, CancellationToken ct) => (await store.GetSourceAsync(id, ct)) is { } source ? Results.Ok(source) : Results.NotFound());
+app.MapGet("/api/v1/sources/{id:guid}", async (Guid id, CancellationToken ct) =>
+    (await store.GetSourceAsync(id, ct)) is { } source ? Results.Ok(source) : Results.NotFound());
 app.MapGet("/api/v1/sources/{id:guid}/sections", async (Guid id, CancellationToken ct) => Results.Ok(await store.GetSourceSectionsAsync(id, ct)));
-app.MapGet("/api/v1/source-sections/{id:guid}", async (Guid id, CancellationToken ct) => (await store.GetSourceSectionAsync(id, ct)) is { } section ? Results.Ok(section) : Results.NotFound());
+app.MapGet("/api/v1/source-sections/{id:guid}", async (Guid id, CancellationToken ct) =>
+    (await store.GetSourceSectionAsync(id, ct)) is { } section ? Results.Ok(section) : Results.NotFound());
 app.MapPost("/api/v1/sources/{id:guid}/toast", async (Guid id, CancellationToken ct) =>
 {
     var source = await store.GetSourceAsync(id, ct);
     if (source is null) return Results.NotFound();
-    var jobs = await QueueSourceJobs(source, await store.GetSourceSectionsAsync(id, ct), store, ct);
+    var jobs = await ToastingCoordinator.QueueSourceJobs(source, await store.GetSourceSectionsAsync(id, ct), store, ct);
     return Results.Ok(new { sourceId = id, jobsQueued = jobs.Count });
 });
 
 app.MapGet("/api/v1/toasting/jobs", async (int? limit, CancellationToken ct) => Results.Ok(await store.GetPendingToastingJobsAsync(limit ?? 5, ct)));
 app.MapPost("/api/v1/toasting/jobs/{id:guid}/result", async (Guid id, ToastingResultInput input, CancellationToken ct) =>
 {
-    var result = await SubmitToastingResult(id, input.Candidates ?? [], store, ct);
+    var result = await ToastingCoordinator.SubmitResult(id, input.Candidates ?? [], store, ct);
     return result is null ? Results.NotFound() : Results.Ok(result);
 });
 
@@ -139,7 +139,7 @@ static object[] McpTools() =>
     Tool("toaster_get_source_sections", "List the sections/pages of an ingested manual or source.", new { type="object", properties=new { sourceId=new { type="string" } }, required=new[]{"sourceId"} }),
     Tool("toaster_get_source_section", "Retrieve one source/manual section by id.", new { type="object", properties=new { sectionId=new { type="string" } }, required=new[]{"sectionId"} }),
     Tool("toaster_queue_source_toasting", "Queue an ingested source for provider-neutral distillation into reusable toast.", new { type="object", properties=new { sourceId=new { type="string" } }, required=new[]{"sourceId"} }),
-    Tool("toaster_add_observation", "Record a meaningful implementation attempt/result. By default this also creates a live toasting job so the current or another model can generalize the lesson.", new { type="object", properties=new { activity=new { type="string" }, attempt=new { type="string" }, result=new { type="string" }, resolution=new { type="string" }, environmentJson=new { type="string" }, queueForToasting=new { type="boolean" } }, required=new[]{"activity","attempt","result"} }),
+    Tool("toaster_add_observation", "Record an implementation attempt/result. By default this creates a live toasting job so the current or another model can generalize the lesson.", new { type="object", properties=new { activity=new { type="string" }, attempt=new { type="string" }, result=new { type="string" }, resolution=new { type="string" }, environmentJson=new { type="string" }, queueForToasting=new { type="boolean" } }, required=new[]{"activity","attempt","result"} }),
     Tool("toaster_get_toasting_jobs", "Get pending manual or live-learning distillation jobs. Process the evidence with your current model/provider and return only reusable operational lessons, not project-specific state.", new { type="object", properties=new { limit=new { type="integer", minimum=1, maximum=25 } } }),
     Tool("toaster_submit_toasting_result", "Submit generalized lessons produced by the current model/provider for a toasting job. Zero candidates is valid when the evidence contains no reusable lesson.", new { type="object", properties=new { jobId=new { type="string" }, candidates=new { type="array", items=new { type="object", properties=new { title=new { type="string" }, statement=new { type="string" }, explanation=new { type="string" }, domains=new { type="array", items=new { type="string" } }, tags=new { type="array", items=new { type="string" } }, conditions=new { type="array", items=new { type="string" } }, exceptions=new { type="array", items=new { type="string" } }, confidence=new { type="number", minimum=0, maximum=1 } }, required=new[]{"title","statement"} } } }, required=new[]{"jobId","candidates"} })
 ];
@@ -180,14 +180,14 @@ static async Task<object> CallTool(JsonElement p, IKnowledgeStore store, Cancell
             var sourceId = Guid.Parse(a.GetProperty("sourceId").GetString()!);
             var source = await store.GetSourceAsync(sourceId, ct);
             if (source is null) return McpError("Source not found.");
-            var jobs = await QueueSourceJobs(source, await store.GetSourceSectionsAsync(sourceId, ct), store, ct);
+            var jobs = await ToastingCoordinator.QueueSourceJobs(source, await store.GetSourceSectionsAsync(sourceId, ct), store, ct);
             return McpText(new { sourceId, jobsQueued = jobs.Count });
         }
         case "toaster_add_observation":
         {
-            var observation = await store.AddObservationAsync(new Observation(Guid.NewGuid(), a.GetProperty("activity").GetString()!, a.GetProperty("attempt").GetString()!, a.GetProperty("result").GetString()!, OptionalString(a,"resolution"), OptionalString(a,"environmentJson"), DateTimeOffset.UtcNow), ct);
+            var observation = await store.AddObservationAsync(new Observation(Guid.NewGuid(), a.GetProperty("activity").GetString()!, a.GetProperty("attempt").GetString()!, a.GetProperty("result").GetString()!, OptionalString(a, "resolution"), OptionalString(a, "environmentJson"), DateTimeOffset.UtcNow), ct);
             var queue = !a.TryGetProperty("queueForToasting", out var q) || q.ValueKind != JsonValueKind.False;
-            var job = queue ? await QueueObservationJob(observation, store, ct) : null;
+            var job = queue ? await ToastingCoordinator.QueueObservationJob(observation, store, ct) : null;
             return McpText(new { observation, toastingJob = job });
         }
         case "toaster_get_toasting_jobs":
@@ -195,9 +195,8 @@ static async Task<object> CallTool(JsonElement p, IKnowledgeStore store, Cancell
         case "toaster_submit_toasting_result":
         {
             var jobId = Guid.Parse(a.GetProperty("jobId").GetString()!);
-            var candidates = new List<ToastCandidateInput>();
-            foreach (var c in a.GetProperty("candidates").EnumerateArray()) candidates.Add(CandidateFromJson(c));
-            var submitted = await SubmitToastingResult(jobId, candidates, store, ct);
+            var candidates = a.GetProperty("candidates").EnumerateArray().Select(CandidateFromJson).ToArray();
+            var submitted = await ToastingCoordinator.SubmitResult(jobId, candidates, store, ct);
             return submitted is null ? McpError("Toasting job not found.") : McpText(submitted);
         }
         default:
@@ -215,7 +214,6 @@ static async Task<IResult> IngestSource(byte[] bytes, string title, string? orig
     IReadOnlyList<SourceSection> sections;
     try { sections = ManualParser.Parse(sourceId, bytes, contentType, title); }
     catch (Exception ex) { return Results.BadRequest(new { error = $"Could not extract this source: {ex.Message}" }); }
-
     if (sections.Count == 0)
         return Results.BadRequest(new { error = "No readable text was extracted. This may be a scanned/image-only PDF; OCR ingestion is not implemented yet." });
 
@@ -227,59 +225,15 @@ static async Task<IResult> IngestSource(byte[] bytes, string title, string? orig
     var objectPath = Path.Combine(dataPath, "sources", "objects", sha + extension.ToLowerInvariant());
     if (!File.Exists(objectPath)) await File.WriteAllBytesAsync(objectPath, bytes, ct);
 
-    var jobs = queueToasting ? await QueueSourceJobs(source, sections, store, ct) : [];
+    var jobs = queueToasting ? await ToastingCoordinator.QueueSourceJobs(source, sections, store, ct) : new List<ToastingJob>();
     return Results.Created($"/api/v1/sources/{sourceId}", new { source, sectionCount = sections.Count, rawObject = objectPath, jobsQueued = jobs.Count });
-}
-
-static async Task<List<ToastingJob>> QueueSourceJobs(SourceDocument source, IReadOnlyList<SourceSection> sections, IKnowledgeStore store, CancellationToken ct)
-{
-    var jobs = new List<ToastingJob>();
-    foreach (var section in sections)
-    {
-        var context = JsonSerializer.Serialize(new { source = new { source.Id, source.Title, source.Origin, source.ContentType }, section = new { section.Id, section.Heading, section.Ordinal, section.Content } });
-        var job = new ToastingJob(Guid.NewGuid(), "source-section", source.Id, section.Id, null, ToastInstruction, context, ToastingJobStatus.Pending, DateTimeOffset.UtcNow, null);
-        jobs.Add(await store.EnqueueToastingJobAsync(job, ct));
-    }
-    return jobs;
-}
-
-static async Task<ToastingJob> QueueObservationJob(Observation observation, IKnowledgeStore store, CancellationToken ct)
-{
-    var context = JsonSerializer.Serialize(observation);
-    var job = new ToastingJob(Guid.NewGuid(), "live-observation", null, null, observation.Id, ToastInstruction, context, ToastingJobStatus.Pending, DateTimeOffset.UtcNow, null);
-    return await store.EnqueueToastingJobAsync(job, ct);
-}
-
-const string ToastInstruction = "Extract reusable application-specific operational lessons from the supplied evidence. Do not merely summarize it and do not preserve project-specific state. Capture techniques, constraints, compatibility facts, failure patterns, successful remedies, warnings, or useful heuristics. Include applicability conditions and exceptions where known. It is valid to return zero candidates if there is no reusable lesson. Never invent evidence that is not present.";
-
-static async Task<object?> SubmitToastingResult(Guid jobId, IReadOnlyList<ToastCandidateInput> candidates, IKnowledgeStore store, CancellationToken ct)
-{
-    var job = await store.GetToastingJobAsync(jobId, ct);
-    if (job is null) return null;
-    if (job.Status == ToastingJobStatus.Completed) return new { jobId, alreadyCompleted = true, toastIds = Array.Empty<Guid>() };
-
-    var created = new List<Guid>();
-    foreach (var candidate in candidates)
-    {
-        if (string.IsNullOrWhiteSpace(candidate.Title) || string.IsNullOrWhiteSpace(candidate.Statement)) continue;
-        var now = DateTimeOffset.UtcNow;
-        var toast = new Toast(Guid.NewGuid(), candidate.Title.Trim(), candidate.Statement.Trim(), candidate.Explanation, candidate.Domains ?? [], candidate.Tags ?? [], candidate.Conditions ?? [], candidate.Exceptions ?? [], Math.Clamp(candidate.Confidence ?? .6, 0, 1), ToastLifecycle.Provisional, now, now);
-        await store.AddToastAsync(toast, ct);
-        var kind = job.Kind == "source-section" ? "manual-distillation" : "implementation-observation";
-        var note = job.ObservationId is { } observationId ? $"Distilled from observation {observationId}" : $"Distilled by external provider from toasting job {job.Id}";
-        await store.AddProvenanceAsync(new Provenance(Guid.NewGuid(), toast.Id, job.SourceId, job.SectionId, kind, note, now), ct);
-        created.Add(toast.Id);
-    }
-
-    await store.CompleteToastingJobAsync(jobId, ct);
-    return new { jobId, candidatesReceived = candidates.Count, toastIds = created };
 }
 
 static ToastCandidateInput CandidateFromJson(JsonElement c) => new(
     c.GetProperty("title").GetString() ?? "Untitled lesson",
     c.GetProperty("statement").GetString() ?? "",
-    OptionalString(c,"explanation"),
-    OptionalStrings(c,"domains"), OptionalStrings(c,"tags"), OptionalStrings(c,"conditions"), OptionalStrings(c,"exceptions"),
+    OptionalString(c, "explanation"),
+    OptionalStrings(c, "domains"), OptionalStrings(c, "tags"), OptionalStrings(c, "conditions"), OptionalStrings(c, "exceptions"),
     c.TryGetProperty("confidence", out var confidence) && confidence.ValueKind == JsonValueKind.Number ? confidence.GetDouble() : null);
 
 static string? OptionalString(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
@@ -287,7 +241,6 @@ static string[]? OptionalStrings(JsonElement e, string name) => e.TryGetProperty
 static string GuessContentType(string fileName) => fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "application/pdf" : "text/plain";
 
 public sealed record ToastInput(string Title, string Statement, string? Explanation, string[]? Domains, string[]? Tags, string[]? Conditions, string[]? Exceptions, double? Confidence);
-public sealed record ToastCandidateInput(string Title, string Statement, string? Explanation, string[]? Domains, string[]? Tags, string[]? Conditions, string[]? Exceptions, double? Confidence);
 public sealed record ToastingResultInput(ToastCandidateInput[]? Candidates);
 public sealed record ObservationInput(string Activity, string Attempt, string Result, string? Resolution, string? EnvironmentJson, bool? QueueForToasting = true);
 public sealed record TextSourceInput(string Title, string Content, string? Origin, string? ContentType, bool? QueueForToasting = false);
