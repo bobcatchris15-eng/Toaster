@@ -28,7 +28,21 @@ PDF manuals are parsed locally using PdfPig's reading-order text extraction. The
 
 Text/Markdown sources are split on headings when available and otherwise into bounded sections.
 
-Scanned/image-only PDF OCR is deliberately an adapter to add later; the core ingestion contract only requires a sequence of source sections.
+### OCR fallback
+
+OCR is an ingestion adapter rather than part of canonical storage. The PDF parser always tries ordinary embedded text first. Only when a page produces very little text does it inspect the page's embedded images and invoke local Tesseract OCR on sufficiently large images. This avoids rasterizing or OCR-processing ordinary digital manuals.
+
+The initial heuristic is intentionally conservative:
+
+- normal text extraction is accepted when a page yields at least roughly 120 characters;
+- otherwise, embedded images smaller than roughly 180,000 pixels are ignored as likely icons/figures rather than scanned pages;
+- OCR output below a low confidence floor is discarded;
+- OCR is used only when it provides more text than normal extraction;
+- OCR-derived sections are labeled `Page N (OCR)`.
+
+OCR is fail-soft. Missing language data, a missing native runtime, malformed images, or unsupported embedded-image encodings do not make ordinary PDF ingestion fail. A scanned page that Toaster cannot decode simply contributes no section rather than crashing the import.
+
+The packaged Windows build supplies compact English Tesseract data in the service's `tessdata` directory. `TOASTER_TESSDATA` can override that location for users who want to supply other language data. The OCR engine is isolated behind `OcrTextExtractor`, so it can be replaced later without changing the source-section storage contract.
 
 ## Provider-neutral toasting
 
@@ -79,7 +93,7 @@ A packaged installation contains three executables:
 - `toaster.exe` — CLI.
 - `Toaster.exe` — human-facing tray/configuration application.
 
-The installer owns service registration and uninstall cleanup. Inno Setup supplies the standard wizard and Windows Installed Apps registration.
+The installer owns service registration and uninstall cleanup. Inno Setup supplies the standard wizard and Windows Installed Apps registration. The packaged build also includes the English OCR data and installs the Microsoft Visual C++ runtime used by the Tesseract native libraries.
 
 The tray app is intentionally sufficient for a normal user to:
 
