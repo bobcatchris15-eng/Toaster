@@ -19,6 +19,7 @@ OutputBaseFilename=Toaster-Setup-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\assets\Toaster.ico
 
 [Files]
 Source: "..\artifacts\publish\Toaster.Service\*"; DestDir: "{app}\Service"; Flags: ignoreversion recursesubdirs createallsubdirs

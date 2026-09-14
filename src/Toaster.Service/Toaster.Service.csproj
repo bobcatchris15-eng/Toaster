@@ -3,6 +3,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <AssemblyName>Toaster.Service</AssemblyName>
+    <ApplicationIcon>..\..\assets\Toaster.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Toaster.Core\Toaster.Core.csproj" />

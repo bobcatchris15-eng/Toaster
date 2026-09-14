@@ -29,7 +29,7 @@ sealed class MainForm : Form
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open Toaster", null, (_, _) => ShowFromTray());
         menu.Items.Add("Exit", null, (_, _) => { _reallyExit = true; _notify!.Visible = false; Close(); });
-        _notify = new NotifyIcon { Text = "Toaster", Icon = SystemIcons.Application, Visible = true, ContextMenuStrip = menu };
+        _notify = new NotifyIcon { Text = "Toaster", Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application, Visible = true, ContextMenuStrip = menu };
         _notify.DoubleClick += (_, _) => ShowFromTray();
 
         var tabs = new TabControl { Dock = DockStyle.Fill };
