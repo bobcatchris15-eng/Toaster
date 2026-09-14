@@ -9,5 +9,6 @@
     <ProjectReference Include="..\Toaster.Storage\Toaster.Storage.csproj" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="TesseractOCR" Version="5.5.2" />
   </ItemGroup>
 </Project>
