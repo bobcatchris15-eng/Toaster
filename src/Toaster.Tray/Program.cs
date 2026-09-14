@@ -4,8 +4,15 @@ using System.Text;
 using System.Text.Json;
 using System.Windows.Forms;
 
-ApplicationConfiguration.Initialize();
-Application.Run(new MainForm());
+static class Program
+{
+    [STAThread]
+    public static void Main()
+    {
+        ApplicationConfiguration.Initialize();
+        Application.Run(new MainForm());
+    }
+}
 
 sealed class MainForm : Form
 {
