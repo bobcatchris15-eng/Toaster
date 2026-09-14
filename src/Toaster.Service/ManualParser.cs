@@ -8,6 +8,7 @@ namespace Toaster.Service;
 internal static class ManualParser
 {
     private const int TargetChunkChars = 6500;
+    private const int OcrFallbackThresholdChars = 120;
 
     public static IReadOnlyList<SourceSection> Parse(Guid sourceId, byte[] bytes, string contentType, string fileName)
     {
@@ -62,13 +63,26 @@ internal static class ManualParser
         foreach (var page in document.GetPages())
         {
             pageNumber++;
-            var text = ContentOrderTextExtractor.GetText(page)?.Trim();
-            if (string.IsNullOrWhiteSpace(text)) continue;
+            var extracted = ContentOrderTextExtractor.GetText(page)?.Trim() ?? string.Empty;
+            var usedOcr = false;
 
-            var parts = Chunk(text, TargetChunkChars);
+            if (extracted.Length < OcrFallbackThresholdChars)
+            {
+                var ocr = OcrTextExtractor.TryReadPage(page)?.Trim();
+                if (!string.IsNullOrWhiteSpace(ocr) && ocr.Length > extracted.Length)
+                {
+                    extracted = ocr;
+                    usedOcr = true;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(extracted)) continue;
+
+            var parts = Chunk(extracted, TargetChunkChars);
             for (var i = 0; i < parts.Count; i++)
             {
-                var heading = parts.Count == 1 ? $"Page {pageNumber}" : $"Page {pageNumber} — part {i + 1}";
+                var sourceLabel = usedOcr ? $"Page {pageNumber} (OCR)" : $"Page {pageNumber}";
+                var heading = parts.Count == 1 ? sourceLabel : $"{sourceLabel} — part {i + 1}";
                 sections.Add(new SourceSection(Guid.NewGuid(), sourceId, heading, parts[i], ordinal++));
             }
         }
@@ -93,7 +107,12 @@ internal static class ManualParser
 
             if (paragraph.Length > target)
             {
-                if (current.Length > 0) { result.Add(current.ToString().Trim()); current.Clear(); }
+                if (current.Length > 0)
+                {
+                    result.Add(current.ToString().Trim());
+                    current.Clear();
+                }
+
                 for (var start = 0; start < paragraph.Length; start += target)
                     result.Add(paragraph.Substring(start, Math.Min(target, paragraph.Length - start)).Trim());
             }
