@@ -126,7 +126,7 @@ app.MapPost("/mcp", async (HttpContext http, CancellationToken ct) =>
             return JsonRpcError(id, -32601, $"Method not found: {method}");
     }
 
-    return Results.Json(new { jsonrpc = "2.0", id = id.ValueKind == JsonValueKind.Undefined ? null : id, result });
+    return Results.Json(new { jsonrpc = "2.0", id = id.ValueKind == JsonValueKind.Undefined ? null : (object)id, result });
 });
 
 app.Run();
@@ -145,8 +145,8 @@ static object[] McpTools() =>
 ];
 
 static object Tool(string name, string description, object inputSchema) => new { name, description, inputSchema };
-static IResult JsonRpcError(JsonElement id, int code, string message) => Results.Json(new { jsonrpc = "2.0", id = id.ValueKind == JsonValueKind.Undefined ? null : id, error = new { code, message } });
-static object McpText(object value) => new { content = new[] { new { type = "text", text = JsonSerializer.Serialize(value) } }, isError = false };
+static IResult JsonRpcError(JsonElement id, int code, string message) => Results.Json(new { jsonrpc = "2.0", id = id.ValueKind == JsonValueKind.Undefined ? null : (object)id, error = new { code, message } });
+static object McpText(object? value) => new { content = new[] { new { type = "text", text = JsonSerializer.Serialize(value) } }, isError = false };
 static object McpError(string text) => new { content = new[] { new { type = "text", text } }, isError = true };
 
 static async Task<object> CallTool(JsonElement p, IKnowledgeStore store, CancellationToken ct)

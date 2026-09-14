@@ -13,7 +13,7 @@ internal static class OcrTextExtractor
     private static Engine? _engine;
     private static bool _unavailable;
 
-    public static string? TryReadPage(Page page)
+    public static string? TryReadPage(UglyToad.PdfPig.Content.Page page)
     {
         if (_unavailable) return null;
 

@@ -40,8 +40,12 @@ if(-not (Test-Path $vcRedist)){
 
 $iscc=(Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
 if(-not $iscc){
-    $candidate='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
-    if(Test-Path $candidate){$iscc=$candidate}
+    $candidates=@(
+        'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+        'C:\Program Files\Inno Setup 6\ISCC.exe',
+        (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+    )
+    $iscc=$candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 
 if($iscc){

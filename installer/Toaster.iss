@@ -30,15 +30,15 @@ Source: "..\scripts\uninstall-service.ps1"; DestDir: "{app}\scripts"; Flags: ign
 
 [Icons]
 Name: "{group}\Toaster"; Filename: "{app}\Tray\Toaster.exe"
-Name: "{group}\Toaster CLI"; Filename: "{cmd}"; Parameters: "/k \"{app}\Cli\toaster.exe status\""
+Name: "{group}\Toaster CLI"; Filename: "{cmd}"; Parameters: "/k ""{app}\Cli\toaster.exe"" status"
 
 [Registry]
-Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Toaster"; ValueData: "\"{app}\Tray\Toaster.exe\""; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Toaster"; ValueData: """{app}\Tray\Toaster.exe"""; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; Flags: runhidden waituntilterminated
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File \"{app}\scripts\install-service.ps1\" -InstallDir \"{app}\""; Flags: runhidden waituntilterminated
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\install-service.ps1"" -InstallDir ""{app}"""; Flags: runhidden waituntilterminated
 Filename: "{app}\Tray\Toaster.exe"; Description: "Open Toaster"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File \"{app}\scripts\uninstall-service.ps1\""; Flags: runhidden waituntilterminated
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\uninstall-service.ps1"""; Flags: runhidden waituntilterminated
