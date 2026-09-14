@@ -28,6 +28,10 @@ The actual configured endpoint is always shown by the tray app and CLI.
 
 The tray app accepts PDF manuals plus text/Markdown/HTML/JSON/source files. PDF text is extracted in reading order and indexed page-by-page; large pages are split into bounded sections. Original files are retained locally under Toaster's source-object store so the indexed Encyclopedia representation remains backed by the original evidence.
 
+Scanned and image-heavy PDF pages automatically fall back to **local OCR** when normal PDF text extraction produces too little useful text. OCR is only attempted on text-poor pages and only against sufficiently large embedded page images, so normal digital manuals pay essentially no OCR cost. OCR-derived sections are labeled `Page N (OCR)` for provenance and debugging.
+
+The Windows package includes the fast English Tesseract language data by default. OCR remains local; no document content is uploaded to an OCR service. Advanced users can point `TOASTER_TESSDATA` at another Tesseract data directory when adding additional language models.
+
 From the CLI:
 
 ```powershell
@@ -39,8 +43,6 @@ To also queue the manual for distillation by a connected model/provider:
 ```powershell
 toaster ingest .\manual.pdf --toast
 ```
-
-Image-only/scanned PDFs currently need OCR before import. Native OCR is a later ingestion adapter rather than a requirement of the core store.
 
 ## Toasting with whichever model you already use
 
@@ -91,7 +93,7 @@ dotnet build Toaster.sln -c Release
 
 ## Windows packaging
 
-`scripts/package.ps1` publishes the Windows executables and, when Inno Setup is installed, builds `installer/Toaster.iss` into a normal Windows setup executable. The installer registers the service, creates Start Menu shortcuts, launches the tray app after setup, and is automatically represented in Windows Installed Apps by Inno Setup.
+`scripts/package.ps1` publishes the Windows executables and, when Inno Setup is installed, builds `installer/Toaster.iss` into a normal Windows setup executable. Packaging also obtains the compact English OCR data and the Microsoft Visual C++ runtime required by the local Tesseract native libraries. The installer registers the service, installs that runtime prerequisite, creates Start Menu shortcuts, launches the tray app after setup, and is automatically represented in Windows Installed Apps by Inno Setup.
 
 ## Independence
 
