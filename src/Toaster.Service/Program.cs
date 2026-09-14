@@ -215,7 +215,7 @@ static async Task<IResult> IngestSource(byte[] bytes, string title, string? orig
     try { sections = ManualParser.Parse(sourceId, bytes, contentType, title); }
     catch (Exception ex) { return Results.BadRequest(new { error = $"Could not extract this source: {ex.Message}" }); }
     if (sections.Count == 0)
-        return Results.BadRequest(new { error = "No readable text was extracted. This may be a scanned/image-only PDF; OCR ingestion is not implemented yet." });
+        return Results.BadRequest(new { error = "No readable text was extracted. This PDF may contain unsupported image encoding, unusually low-quality scans, or no readable text." });
 
     var source = new SourceDocument(sourceId, title, origin, contentType, sha, DateTimeOffset.UtcNow);
     await store.AddSourceAsync(source, sections, ct);
