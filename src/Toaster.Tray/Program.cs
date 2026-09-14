@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -10,16 +11,18 @@ sealed class MainForm : Form
 {
     private readonly TextBox _endpoint = new() { ReadOnly = true, Dock = DockStyle.Top };
     private readonly TextBox _config = new() { ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
-    private readonly Label _status = new() { Dock = DockStyle.Top, Height = 36, Text = "Checking Toaster service…", Padding = new Padding(8) };
-    private readonly HttpClient _http = new() { BaseAddress = new Uri("http://127.0.0.1:47321") };
+    private readonly Label _status = new() { Dock = DockStyle.Top, Height = 56, Text = "Checking Toaster service…", Padding = new Padding(8) };
+    private readonly CheckBox _queueToasting = new() { Text = "Queue imported manuals for toasting by my connected model/provider", Checked = true, Dock = DockStyle.Top, Height = 34, Padding = new Padding(8, 4, 4, 4) };
+    private readonly Label _sourceNote = new() { Text = "Import manuals and research into Toaster. PDFs are extracted page-by-page; text, Markdown, HTML, JSON and source files are sectioned locally. Scanned/image-only PDFs currently require OCR before import.", Dock = DockStyle.Top, Height = 72, Padding = new Padding(8) };
+    private readonly HttpClient _http = new() { BaseAddress = new Uri("http://127.0.0.1:47321"), Timeout = TimeSpan.FromMinutes(10) };
     private readonly NotifyIcon _notify;
     private bool _reallyExit;
 
     public MainForm()
     {
         Text = "Toaster";
-        Width = 760;
-        Height = 500;
+        Width = 800;
+        Height = 540;
         StartPosition = FormStartPosition.CenterScreen;
 
         var menu = new ContextMenuStrip();
@@ -52,7 +55,7 @@ sealed class MainForm : Form
     private TabPage BuildIntegrationsPage()
     {
         var page = new TabPage("Integrations");
-        var copyConfig = new Button { Text = "Copy configuration", Dock = DockStyle.Top, Height = 36 };
+        var copyConfig = new Button { Text = "Copy configuration + agent instructions", Dock = DockStyle.Top, Height = 36 };
         copyConfig.Click += (_, _) => Clipboard.SetText(_config.Text);
         var copy = new Button { Text = "Copy MCP address", Dock = DockStyle.Top, Height = 36 };
         copy.Click += (_, _) => Clipboard.SetText(_endpoint.Text);
@@ -65,30 +68,53 @@ sealed class MainForm : Form
 
     private TabPage BuildSourcesPage()
     {
-        var page = new TabPage("Sources");
-        var note = new Label { Text = "Import a text-based research file into the local Encyclopedia index. PDF/DOCX parsing is planned next.", Dock = DockStyle.Top, Height = 52, Padding = new Padding(8) };
-        var import = new Button { Text = "Import text / Markdown / code file…", Dock = DockStyle.Top, Height = 42 };
+        var page = new TabPage("Manuals & Sources");
+        var import = new Button { Text = "Import manual or research file…", Dock = DockStyle.Top, Height = 46 };
         import.Click += async (_, _) => await ImportSourceAsync();
         page.Controls.Add(import);
-        page.Controls.Add(note);
+        page.Controls.Add(_queueToasting);
+        page.Controls.Add(_sourceNote);
         return page;
     }
 
     private async Task ImportSourceAsync()
     {
-        using var picker = new OpenFileDialog { Filter = "Text and source files|*.txt;*.md;*.html;*.htm;*.json;*.cs;*.ps1;*.py;*.js;*.ts|All files|*.*", CheckFileExists = true };
+        using var picker = new OpenFileDialog
+        {
+            Filter = "Manuals and research|*.pdf;*.txt;*.md;*.html;*.htm;*.json;*.cs;*.ps1;*.py;*.js;*.ts|PDF manuals|*.pdf|Text and source files|*.txt;*.md;*.html;*.htm;*.json;*.cs;*.ps1;*.py;*.js;*.ts|All files|*.*",
+            CheckFileExists = true
+        };
         if (picker.ShowDialog(this) != DialogResult.OK) return;
+
         try
         {
-            var content = await File.ReadAllTextAsync(picker.FileName, Encoding.UTF8);
-            var response = await _http.PostAsJsonAsync("/api/v1/sources/text", new { title = Path.GetFileName(picker.FileName), content, origin = picker.FileName, contentType = "text/plain" });
-            response.EnsureSuccessStatusCode();
-            MessageBox.Show(this, "Source imported into Toaster.", "Toaster", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _sourceNote.Text = "Importing and indexing " + Path.GetFileName(picker.FileName) + "…";
+            var bytes = await File.ReadAllBytesAsync(picker.FileName);
+            using var body = new ByteArrayContent(bytes);
+            body.Headers.ContentType = new MediaTypeHeaderValue(Path.GetExtension(picker.FileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase) ? "application/pdf" : "text/plain");
+            var url = "/api/v1/sources/file?fileName=" + Uri.EscapeDataString(Path.GetFileName(picker.FileName)) +
+                      "&title=" + Uri.EscapeDataString(Path.GetFileName(picker.FileName)) +
+                      "&origin=" + Uri.EscapeDataString(picker.FileName) +
+                      "&queueToasting=" + (_queueToasting.Checked ? "true" : "false");
+            var response = await _http.PostAsync(url, body);
+            var responseText = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode) throw new InvalidOperationException(responseText);
+
+            using var result = JsonDocument.Parse(responseText);
+            var duplicate = result.RootElement.TryGetProperty("duplicate", out var d) && d.GetBoolean();
+            var queued = result.RootElement.TryGetProperty("jobsQueued", out var jq) ? jq.GetInt32() : 0;
+            MessageBox.Show(this,
+                duplicate ? "That exact source is already in Toaster." : $"Source imported into Toaster.\n\nQueued toasting jobs: {queued}",
+                "Toaster", MessageBoxButtons.OK, MessageBoxIcon.Information);
             await RefreshAsync();
         }
         catch (Exception ex)
         {
             MessageBox.Show(this, "Import failed: " + ex.Message, "Toaster", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _sourceNote.Text = "Import manuals and research into Toaster. PDFs are extracted page-by-page; text, Markdown, HTML, JSON and source files are sectioned locally. Scanned/image-only PDFs currently require OCR before import.";
         }
     }
 
@@ -97,10 +123,13 @@ sealed class MainForm : Form
         try
         {
             var status = await _http.GetFromJsonAsync<JsonElement>("/api/v1/status");
-            _status.Text = $"Service: {status.GetProperty("service").GetString()}    Toast: {status.GetProperty("toastCount").GetInt64()}    Sources: {status.GetProperty("sourceCount").GetInt64()}    Observations: {status.GetProperty("observationCount").GetInt64()}";
+            _status.Text = $"Service: {status.GetProperty("service").GetString()}    Toast: {status.GetProperty("toastCount").GetInt64()}    Sources: {status.GetProperty("sourceCount").GetInt64()}    Observations: {status.GetProperty("observationCount").GetInt64()}    Pending toasting: {status.GetProperty("pendingToastingJobs").GetInt64()}";
             var x = await _http.GetFromJsonAsync<JsonElement>("/api/v1/integrations");
             _endpoint.Text = x.GetProperty("mcpEndpoint").GetString()!;
-            _config.Text = "Generic MCP connection:\r\n\r\nName: Toaster\r\nTransport: Streamable HTTP\r\nURL: " + _endpoint.Text + "\r\n\r\nJSON-style configuration:\r\n\r\n" + JsonSerializer.Serialize(x.GetProperty("examples").GetProperty("json"), new JsonSerializerOptions { WriteIndented = true });
+            var instructions = x.GetProperty("agentInstructions").GetString();
+            _config.Text = "Generic MCP connection:\r\n\r\nName: Toaster\r\nTransport: Streamable HTTP\r\nURL: " + _endpoint.Text +
+                           "\r\n\r\nSuggested agent instructions:\r\n\r\n" + instructions +
+                           "\r\n\r\nJSON-style configuration:\r\n\r\n" + JsonSerializer.Serialize(x.GetProperty("examples").GetProperty("json"), new JsonSerializerOptions { WriteIndented = true });
             _notify.Text = "Toaster — service healthy";
         }
         catch (Exception ex)
