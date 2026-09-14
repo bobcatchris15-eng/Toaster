@@ -1,1 +1,13 @@
-<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><TargetFramework>net8.0</TargetFramework><OutputType>Exe</OutputType><AssemblyName>Toaster.Service</AssemblyName></PropertyGroup><ItemGroup><ProjectReference Include="..\Toaster.Core\Toaster.Core.csproj" /><ProjectReference Include="..\Toaster.Storage\Toaster.Storage.csproj" /><PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" /></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Toaster.Service</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Toaster.Core\Toaster.Core.csproj" />
+    <ProjectReference Include="..\Toaster.Storage\Toaster.Storage.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
+    <PackageReference Include="PdfPig" Version="0.1.17-alpha-202609071845-0d1d6" />
+  </ItemGroup>
+</Project>
