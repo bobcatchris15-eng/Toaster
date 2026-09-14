@@ -26,6 +26,7 @@ var app = builder.Build();
 var store = app.Services.GetRequiredService<IKnowledgeStore>();
 await store.InitializeAsync();
 var mcpEndpoint = $"http://127.0.0.1:{port}/mcp";
+var agentInstructions = "Use Toaster as reusable technical memory. Before or during work, query Toaster for relevant Toast and likely source/manual sections; prefer compact Toast first, then retrieve deeper source sections only when needed. When you make a substantive implementation mistake, identify what was wrong, and correct it, record the attempt, failure, cause/fix, and relevant environment with toaster_add_observation so Toaster can distill a generalized reusable lesson. Do this for meaningful mistakes worth avoiding again, not trivial typos/noise or transient project-specific state. Periodically check toaster_get_toasting_jobs when appropriate, distill pending manual or live-learning jobs into reusable operational lessons, and submit them with toaster_submit_toasting_result. Do not store ordinary project state as Toast.";
 
 app.MapGet("/", () => Results.Redirect("/api/v1/status"));
 app.MapGet("/api/v1/status", (CancellationToken ct) => store.GetStatusAsync(mcpEndpoint, ct));
@@ -33,7 +34,7 @@ app.MapGet("/api/v1/integrations", () => Results.Ok(new
 {
     mcpEndpoint,
     transport = "streamable-http",
-    agentInstructions = "Use Toaster for reusable expertise. Whenever you make a substantive implementation mistake, discover what was wrong, and correct it, record the attempt, failure, cause/fix, and relevant environment with toaster_add_observation so Toaster can distill a generalized reusable lesson from the correction. Do this for meaningful mistakes worth avoiding again, not trivial typos/noise or project-specific state. Periodically call toaster_get_toasting_jobs; distill each job into reusable operational lessons and submit them with toaster_submit_toasting_result. Do not turn project-specific state into toast.",
+    agentInstructions,
     examples = new
     {
         generic = new { name = "Toaster", url = mcpEndpoint },
@@ -112,7 +113,7 @@ app.MapPost("/mcp", async (HttpContext http, CancellationToken ct) =>
     switch (method)
     {
         case "initialize":
-            result = new { protocolVersion = "2025-06-18", capabilities = new { tools = new { listChanged = false } }, serverInfo = new { name = "Toaster", version = "0.2.0" } };
+            result = new { protocolVersion = "2025-06-18", capabilities = new { tools = new { listChanged = false } }, serverInfo = new { name = "Toaster", version = "0.2.0" }, instructions = agentInstructions };
             break;
         case "notifications/initialized":
             return Results.NoContent();
