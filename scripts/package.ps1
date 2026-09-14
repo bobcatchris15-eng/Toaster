@@ -1,11 +1,52 @@
 param([string]$Configuration='Release',[string]$Runtime='win-x64')
 $ErrorActionPreference='Stop'
+
 $root=Split-Path $PSScriptRoot -Parent
 $out=Join-Path $root 'artifacts\publish'
+$redist=Join-Path $root 'artifacts\redist'
+
 Remove-Item $out -Recurse -Force -ErrorAction SilentlyContinue
 New-Item $out -ItemType Directory -Force | Out-Null
+New-Item $redist -ItemType Directory -Force | Out-Null
+
 $projects=@('Toaster.Service','Toaster.Cli','Toaster.Tray')
-foreach($p in $projects){ dotnet publish (Join-Path $root "src\$p\$p.csproj") -c $Configuration -r $Runtime --self-contained true -p:PublishSingleFile=true -o (Join-Path $out $p) }
+foreach($p in $projects){
+    $project=Join-Path $root "src\$p\$p.csproj"
+    $destination=Join-Path $out $p
+    if($p -eq 'Toaster.Service'){
+        # Keep the service multi-file so native OCR DLL loading remains boring and reliable.
+        dotnet publish $project -c $Configuration -r $Runtime --self-contained true -p:PublishSingleFile=false -o $destination
+    }
+    else{
+        dotnet publish $project -c $Configuration -r $Runtime --self-contained true -p:PublishSingleFile=true -o $destination
+    }
+}
+
+# Lightweight English OCR model. This is only used on PDF pages where ordinary text extraction is insufficient.
+$tessDir=Join-Path $out 'Toaster.Service\tessdata'
+New-Item $tessDir -ItemType Directory -Force | Out-Null
+$engData=Join-Path $tessDir 'eng.traineddata'
+if(-not (Test-Path $engData)){
+    Write-Host 'Downloading compact English OCR data...'
+    Invoke-WebRequest 'https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata' -OutFile $engData
+}
+
+# Tesseract's Windows native binaries require the Visual C++ 2022 runtime. Bundle the official redistributable so setup works on clean PCs.
+$vcRedist=Join-Path $redist 'vc_redist.x64.exe'
+if(-not (Test-Path $vcRedist)){
+    Write-Host 'Downloading Microsoft Visual C++ runtime...'
+    Invoke-WebRequest 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $vcRedist
+}
+
 $iscc=(Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
-if(-not $iscc){ $candidate='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'; if(Test-Path $candidate){$iscc=$candidate} }
-if($iscc){ & $iscc (Join-Path $root 'installer\Toaster.iss') } else { Write-Warning 'Inno Setup compiler not found. Published binaries are ready under artifacts\publish.' }
+if(-not $iscc){
+    $candidate='C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+    if(Test-Path $candidate){$iscc=$candidate}
+}
+
+if($iscc){
+    & $iscc (Join-Path $root 'installer\Toaster.iss')
+}
+else{
+    Write-Warning 'Inno Setup compiler not found. Published binaries are ready under artifacts\publish.'
+}
