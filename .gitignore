@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+artifacts/
+*.user
+*.suo
+*.db
+*.db-shm
+*.db-wal
+installer/Output/

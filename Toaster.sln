@@ -1,0 +1,42 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Toaster.Core", "src\Toaster.Core\Toaster.Core.csproj", "{84A141D1-A85A-42D9-841F-443448BA3D70}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Toaster.Storage", "src\Toaster.Storage\Toaster.Storage.csproj", "{EFA54F15-F55B-43EA-87BC-D1450422E85A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Toaster.Service", "src\Toaster.Service\Toaster.Service.csproj", "{A323D4E0-EB8B-4BD5-B243-D0B1220A859C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Toaster.Cli", "src\Toaster.Cli\Toaster.Cli.csproj", "{63B5E058-9952-43DC-BD79-17E11C53B04B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Toaster.Tray", "src\Toaster.Tray\Toaster.Tray.csproj", "{075FBB5E-A0BD-4556-8BDC-EF8DD68AD0DA}"
+EndProject
+Global
+  GlobalSection(SolutionConfigurationPlatforms) = preSolution
+    Debug|Any CPU = Debug|Any CPU
+    Release|Any CPU = Release|Any CPU
+  EndGlobalSection
+  GlobalSection(ProjectConfigurationPlatforms) = postSolution
+    {84A141D1-A85A-42D9-841F-443448BA3D70}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {84A141D1-A85A-42D9-841F-443448BA3D70}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {84A141D1-A85A-42D9-841F-443448BA3D70}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {84A141D1-A85A-42D9-841F-443448BA3D70}.Release|Any CPU.Build.0 = Release|Any CPU
+    {EFA54F15-F55B-43EA-87BC-D1450422E85A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {EFA54F15-F55B-43EA-87BC-D1450422E85A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {EFA54F15-F55B-43EA-87BC-D1450422E85A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {EFA54F15-F55B-43EA-87BC-D1450422E85A}.Release|Any CPU.Build.0 = Release|Any CPU
+    {A323D4E0-EB8B-4BD5-B243-D0B1220A859C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {A323D4E0-EB8B-4BD5-B243-D0B1220A859C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {A323D4E0-EB8B-4BD5-B243-D0B1220A859C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {A323D4E0-EB8B-4BD5-B243-D0B1220A859C}.Release|Any CPU.Build.0 = Release|Any CPU
+    {63B5E058-9952-43DC-BD79-17E11C53B04B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {63B5E058-9952-43DC-BD79-17E11C53B04B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {63B5E058-9952-43DC-BD79-17E11C53B04B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {63B5E058-9952-43DC-BD79-17E11C53B04B}.Release|Any CPU.Build.0 = Release|Any CPU
+    {075FBB5E-A0BD-4556-8BDC-EF8DD68AD0DA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {075FBB5E-A0BD-4556-8BDC-EF8DD68AD0DA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {075FBB5E-A0BD-4556-8BDC-EF8DD68AD0DA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {075FBB5E-A0BD-4556-8BDC-EF8DD68AD0DA}.Release|Any CPU.Build.0 = Release|Any CPU
+  EndGlobalSection
+EndGlobal
