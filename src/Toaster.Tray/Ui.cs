@@ -40,17 +40,18 @@ static class Theme
     public static Font Display(float size, FontStyle style = FontStyle.Bold) => new(DisplayFamily, size, style, GraphicsUnit.Point);
     public static Font Mono(float size, FontStyle style = FontStyle.Regular) => new(MonoFamily, size, style, GraphicsUnit.Point);
 
-    public static GraphicsPath Round(Rectangle r, int radius)
+    /// <summary>
+    /// A hard-edged panel: square corners and a crisp single-pixel border.
+    /// Antialiasing is suspended so axis-aligned edges land on whole pixels.
+    /// </summary>
+    public static void Slab(Graphics g, Rectangle r, Color fill, Color edge)
     {
-        var path = new GraphicsPath();
-        if (radius <= 0) { path.AddRectangle(r); return path; }
-        var d = radius * 2;
-        path.AddArc(r.X, r.Y, d, d, 180, 90);
-        path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-        path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-        path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-        path.CloseFigure();
-        return path;
+        if (r.Width <= 0 || r.Height <= 0) return;
+        var previous = g.SmoothingMode;
+        g.SmoothingMode = SmoothingMode.None;
+        using (var b = new SolidBrush(fill)) g.FillRectangle(b, r);
+        using (var pen = new Pen(edge)) g.DrawRectangle(pen, r);
+        g.SmoothingMode = previous;
     }
 
     /// <summary>Draws (or just measures) text with manual letter spacing. Returns the drawn width.</summary>
@@ -206,7 +207,6 @@ sealed class GlassPanel : Panel
 /// <summary>A raised rounded surface with a hairline border.</summary>
 class CardPanel : Panel
 {
-    public int Radius { get; set; } = 8;
     public Color Fill { get; set; } = Theme.Surface;
     public Color Edge { get; set; } = Theme.Border;
 
@@ -225,10 +225,7 @@ class CardPanel : Panel
         g.SmoothingMode = SmoothingMode.AntiAlias;
         var r = new Rectangle(0, 0, Width - 1, Height - 1);
         if (r.Width <= 0 || r.Height <= 0) return;
-        using var path = Theme.Round(r, Radius);
-        using (var b = new SolidBrush(Fill)) g.FillPath(b, path);
-        using var pen = new Pen(Edge);
-        g.DrawPath(pen, path);
+        Theme.Slab(g, r, Fill, Edge);
     }
 }
 
@@ -266,16 +263,11 @@ sealed class MetricTile : Control
         var r = new Rectangle(0, 0, Width - 1, Height - 1);
         if (r.Width <= 2 || r.Height <= 2) return;
 
-        using (var path = Theme.Round(r, 8))
-        {
-            using (var b = new SolidBrush(_hot ? Theme.SurfaceHover : Theme.Surface)) g.FillPath(b, path);
-            using var pen = new Pen(_hot ? Theme.BorderHi : Theme.Border);
-            g.DrawPath(pen, path);
-        }
+        Theme.Slab(g, r, _hot ? Theme.SurfaceHover : Theme.Surface, _hot ? Theme.BorderHi : Theme.Border);
 
         // Accent rule across the top edge — the tile's identity colour.
         using (var rule = new SolidBrush(Rule))
-            g.FillRectangle(rule, new Rectangle(13, 0, Math.Min(34, r.Width - 26), 2));
+            g.FillRectangle(rule, new Rectangle(r.X, r.Y, r.Width + 1, 2));
 
         using var caption = Theme.Display(7.5f);
         Theme.Tracked(g, Caption.ToUpperInvariant(), caption, _hot ? Theme.Muted : Theme.Faint, 13, 16, 2);
@@ -325,12 +317,10 @@ sealed class StatusPill : Control
         var r = new Rectangle(0, 0, Width - 1, Height - 1);
         if (r.Width <= 2 || r.Height <= 2) return;
 
-        using (var path = Theme.Round(r, r.Height / 2))
-        {
-            using (var b = new SolidBrush(Theme.SurfaceSunken)) g.FillPath(b, path);
-            using var pen = new Pen(Color.FromArgb(120, _tone));
-            g.DrawPath(pen, path);
-        }
+        Theme.Slab(g, r, Theme.SurfaceSunken, Color.FromArgb(120, _tone));
+        // A solid bar of the state colour anchors the left edge.
+        using (var anchor = new SolidBrush(_tone))
+            g.FillRectangle(anchor, new Rectangle(r.X, r.Y, 3, r.Height + 1));
 
         var cy = r.Height / 2;
         using (var halo = new SolidBrush(Color.FromArgb(55, _tone)))
@@ -469,12 +459,7 @@ sealed class FlatButton : Button
             ink = _hot ? Theme.Text : Theme.Muted;
         }
 
-        using (var path = Theme.Round(r, 7))
-        {
-            using (var b = new SolidBrush(fill)) g.FillPath(b, path);
-            using var pen = new Pen(edge);
-            g.DrawPath(pen, path);
-        }
+        Theme.Slab(g, r, fill, edge);
 
         // Fit the label rather than letting it spill past the slab: give up the
         // letter spacing first, then step the type size down.
@@ -524,12 +509,8 @@ sealed class FlatCheck : CheckBox
         g.SmoothingMode = SmoothingMode.AntiAlias;
         var box = new Rectangle(0, (Height - 17) / 2, 17, 17);
 
-        using (var path = Theme.Round(box, 5))
-        {
-            using (var b = new SolidBrush(Checked ? Theme.Accent : _hot ? Theme.SurfaceHover : Theme.SurfaceSunken)) g.FillPath(b, path);
-            using var pen = new Pen(Checked ? Theme.Accent : _hot ? Theme.BorderHi : Theme.Border);
-            g.DrawPath(pen, path);
-        }
+        Theme.Slab(g, box, Checked ? Theme.Accent : _hot ? Theme.SurfaceHover : Theme.SurfaceSunken,
+                   Checked ? Theme.Accent : _hot ? Theme.BorderHi : Theme.Border);
 
         if (Checked)
             using (var tick = new Pen(Color.FromArgb(0x16, 0x10, 0x06), 2.1f) { StartCap = LineCap.Round, EndCap = LineCap.Round })

@@ -145,7 +145,7 @@ sealed class MainForm : Form
     {
         base.OnHandleCreated(e);
         TrySetWindowAttribute(20, 1);   // DWMWA_USE_IMMERSIVE_DARK_MODE
-        TrySetWindowAttribute(33, 2);   // DWMWA_WINDOW_CORNER_PREFERENCE = round
+        TrySetWindowAttribute(33, 1);   // DWMWA_WINDOW_CORNER_PREFERENCE = do not round
         TrySetWindowAttribute(34, 0x00202A36); // DWMWA_BORDER_COLOR (BGR)
         TrySetWindowAttribute(35, 0x00131C25); // DWMWA_CAPTION_COLOR (BGR)
         TrySetWindowAttribute(36, 0x00C5A88B); // DWMWA_TEXT_COLOR (BGR)
