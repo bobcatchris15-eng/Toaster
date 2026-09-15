@@ -7,16 +7,44 @@ using Toaster.Service;
 using Toaster.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
+// Both of these no-op unless the process really is hosted that way, so an
+// interactive run on either platform is unaffected.
 builder.Host.UseWindowsService(o => o.ServiceName = "Toaster");
+builder.Host.UseSystemd();
 builder.Services.Configure<JsonOptions>(o => o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 256L * 1024 * 1024);
 
 var port = builder.Configuration.GetValue<int?>("Toaster:Port") ?? 47321;
-var configuredPath = builder.Configuration["Toaster:DataPath"] ?? "%LOCALAPPDATA%\\Toaster";
-var dataPath = Environment.ExpandEnvironmentVariables(configuredPath);
-if (configuredPath.Contains("%LOCALAPPDATA%", StringComparison.OrdinalIgnoreCase) && !Environment.UserInteractive)
-    dataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Toaster");
+var configuredPath = builder.Configuration["Toaster:DataPath"];
+var dataPath = string.IsNullOrWhiteSpace(configuredPath)
+    ? DefaultDataPath()
+    : Environment.ExpandEnvironmentVariables(configuredPath);
 Directory.CreateDirectory(dataPath);
+
+// Where Toaster keeps its database when nothing is configured. A background
+// service has no user profile worth writing into, so it takes the machine-wide
+// location; an interactive run stays inside the user's own profile.
+static string DefaultDataPath()
+{
+    if (OperatingSystem.IsWindows())
+    {
+        var folder = Environment.UserInteractive
+            ? Environment.SpecialFolder.LocalApplicationData
+            : Environment.SpecialFolder.CommonApplicationData;
+        return Path.Combine(Environment.GetFolderPath(folder), "Toaster");
+    }
+
+    // Environment.UserInteractive is always true on Unix, so privilege is the
+    // usable signal for "this is a system unit, not someone's desktop session".
+    if (Environment.IsPrivilegedProcess) return "/var/lib/toaster";
+
+    var xdgDataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+    return Path.Combine(
+        string.IsNullOrWhiteSpace(xdgDataHome)
+            ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+            : xdgDataHome,
+        "toaster");
+}
 Directory.CreateDirectory(Path.Combine(dataPath, "sources", "objects"));
 
 builder.WebHost.UseUrls($"http://127.0.0.1:{port}");

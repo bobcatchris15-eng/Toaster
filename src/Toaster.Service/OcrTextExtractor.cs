@@ -75,7 +75,20 @@ internal static class OcrTextExtractor
 
         if (!File.Exists(Path.Combine(tessData, "eng.traineddata"))) return null;
 
-        _engine = new Engine(tessData, Language.English, EngineMode.Default);
+        // The Tesseract package ships Windows natives only. On other platforms the
+        // load fails in whatever way the host loader chooses, and no failure here is
+        // worth breaking ingestion over: PDFs with a text layer never reach OCR, and
+        // a scanned page simply yields no text.
+        try
+        {
+            _engine = new Engine(tessData, Language.English, EngineMode.Default);
+        }
+        catch (Exception)
+        {
+            _unavailable = true;
+            return null;
+        }
+
         return _engine;
     }
 }

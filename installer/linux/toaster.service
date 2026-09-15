@@ -1,0 +1,18 @@
+[Unit]
+Description=Toaster — reusable technical memory (local MCP service)
+Documentation=https://github.com/bobcatchris15-eng/Toaster
+After=network.target
+
+[Service]
+# UseSystemd() in the host sends READY=1, so systemd waits for Kestrel to be
+# listening rather than assuming the process is up the moment it forks.
+Type=notify
+ExecStart=__APP_DIR__/service/Toaster.Service
+Restart=on-failure
+RestartSec=5
+# Toaster binds to loopback only; it has no business reaching anywhere else.
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

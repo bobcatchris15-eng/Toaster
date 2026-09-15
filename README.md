@@ -1,6 +1,6 @@
 # Toaster
 
-**Local, Windows-native expertise memory for AI agents.**
+**Local expertise memory for AI agents. Windows desktop app, or headless on Linux.**
 
 Toaster is a standalone local service that stores reusable, application-specific expertise learned from research, manuals, and real agent execution. It is intentionally independent of any specific agent framework, model vendor, IDE, or orchestration methodology.
 
@@ -14,6 +14,8 @@ The core idea is simple:
 ## Product goals
 
 Toaster is being built for ordinary Windows users. The intended experience is: run a normal installer, let it register the local service, open the tray/config app, and copy the displayed MCP URL/configuration into whichever agent app the user wants to connect.
+
+On Linux the same service runs headless as a systemd user unit, managed with the `toaster` CLI. There is no Linux GUI; the tray console is Windows-only.
 
 The default local endpoints are:
 
@@ -94,6 +96,25 @@ dotnet build Toaster.sln -c Release
 ## Windows packaging
 
 `scripts/package.ps1` publishes the Windows executables and, when Inno Setup is installed, builds `installer/Toaster.iss` into a normal Windows setup executable. Packaging also obtains the compact English OCR data and the Microsoft Visual C++ runtime required by the local Tesseract native libraries. The installer registers the service, installs that runtime prerequisite, creates Start Menu shortcuts, launches the tray app after setup, and is automatically represented in Windows Installed Apps by Inno Setup.
+
+## Linux packaging
+
+`scripts/package-linux.ps1` publishes a self-contained `linux-x64` build of the service and CLI and writes `artifacts/linux/toaster-<version>-linux-x64.tar.gz`. It runs on the Windows dev box; no Linux toolchain is needed to produce it.
+
+```sh
+tar -xzf toaster-0.3.1-linux-x64.tar.gz
+cd toaster-0.3.1-linux-x64
+sh install.sh
+```
+
+`install.sh` installs to `~/.local/lib/toaster`, links the CLI into `~/.local/bin`, registers a **systemd user unit** and enables lingering so Toaster survives logout. No root required. Where systemd is absent (containers, WSL without `systemd=true`) it installs the files and prints the command to run the service directly. `sh uninstall.sh` removes the unit and program files but keeps your Toast; `sh uninstall.sh --purge` deletes the data too.
+
+Data lives at `$XDG_DATA_HOME/toaster` (usually `~/.local/share/toaster`), or `/var/lib/toaster` when the service runs privileged. Override either platform's default with `Toaster:DataPath` in `appsettings.json`, or the `Toaster__DataPath` environment variable.
+
+Two deliberate differences from the Windows build:
+
+- **No OCR.** The Tesseract package ships Windows-only native libraries, so scanned or image-heavy PDF pages yield no text on Linux. PDFs with a real text layer are unaffected, as are all text, Markdown, HTML, JSON and source files.
+- **Invariant globalization.** The build sets `InvariantGlobalization=true` so the tarball has no ICU dependency. Without it .NET terminates at startup on any host lacking ICU — including minimal containers and stock WSL images — with a bare stack trace and no useful message.
 
 ## Independence
 
