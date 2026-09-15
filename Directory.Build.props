@@ -4,5 +4,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- Single source of truth for the release version. The service, the MCP
+         handshake and the installer all derive from this; nothing hardcodes it. -->
+    <Version>0.3.1</Version>
   </PropertyGroup>
 </Project>

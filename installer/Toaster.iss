@@ -1,5 +1,9 @@
 #define MyAppName "Toaster"
-#define MyAppVersion "0.2.0"
+#ifndef MyAppVersion
+  ; package.ps1 passes /DMyAppVersion from Directory.Build.props. This fallback
+  ; only applies when ISCC is invoked by hand.
+  #define MyAppVersion "0.3.1"
+#endif
 #define MyAppPublisher "Chris Babcock"
 #define MyAppExeName "Toaster.exe"
 

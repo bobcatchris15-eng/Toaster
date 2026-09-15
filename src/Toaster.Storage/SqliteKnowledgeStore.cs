@@ -56,7 +56,7 @@ CREATE INDEX IF NOT EXISTS ix_toasting_jobs_status_created ON toasting_jobs(stat
         await db.OpenAsync(ct);
         async Task<long> Count(string table) => Convert.ToInt64(await new SqliteCommand($"SELECT COUNT(*) FROM {table}", db).ExecuteScalarAsync(ct));
         var pending = Convert.ToInt64(await new SqliteCommand("SELECT COUNT(*) FROM toasting_jobs WHERE status='Pending'", db).ExecuteScalarAsync(ct));
-        return new SystemStatus("ok", "0.2.0", Path.GetDirectoryName(_databasePath)!, mcpEndpoint, await Count("toast"), await Count("sources"), await Count("observations"), pending);
+        return new SystemStatus("ok", ToasterVersion.Current, Path.GetDirectoryName(_databasePath)!, mcpEndpoint, await Count("toast"), await Count("sources"), await Count("observations"), pending);
     }
 
     public async Task<Toast> AddToastAsync(Toast toast, CancellationToken ct = default)

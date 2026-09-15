@@ -2,6 +2,12 @@ param([string]$Configuration='Release',[string]$Runtime='win-x64')
 $ErrorActionPreference='Stop'
 
 $root=Split-Path $PSScriptRoot -Parent
+
+# The version lives in Directory.Build.props; the installer is told, never asked.
+[xml]$buildProps=Get-Content (Join-Path $root 'Directory.Build.props')
+$version=$buildProps.Project.PropertyGroup.Version
+if(-not $version){ throw 'No <Version> element in Directory.Build.props' }
+Write-Host "Packaging Toaster $version" -ForegroundColor Green
 $out=Join-Path $root 'artifacts\publish'
 $redist=Join-Path $root 'artifacts\redist'
 
@@ -49,7 +55,7 @@ if(-not $iscc){
 }
 
 if($iscc){
-    & $iscc (Join-Path $root 'installer\Toaster.iss')
+    & $iscc "/DMyAppVersion=$version" (Join-Path $root 'installer\Toaster.iss')
 }
 else{
     Write-Warning 'Inno Setup compiler not found. Published binaries are ready under artifacts\publish.'

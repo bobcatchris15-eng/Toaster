@@ -113,7 +113,7 @@ app.MapPost("/mcp", async (HttpContext http, CancellationToken ct) =>
     switch (method)
     {
         case "initialize":
-            result = new { protocolVersion = "2025-06-18", capabilities = new { tools = new { listChanged = false } }, serverInfo = new { name = "Toaster", version = "0.2.0" }, instructions = agentInstructions };
+            result = new { protocolVersion = "2025-06-18", capabilities = new { tools = new { listChanged = false } }, serverInfo = new { name = "Toaster", version = ToasterVersion.Current }, instructions = agentInstructions };
             break;
         case "notifications/initialized":
             return Results.NoContent();
