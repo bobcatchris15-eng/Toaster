@@ -1,0 +1,6 @@
+* text=auto
+
+# Shell scripts and systemd units must keep LF. Checked out with CRLF, a script's
+# shebang becomes "#!/usr/bin/env sh\r" and Linux reports "bad interpreter".
+*.sh text eol=lf
+*.service text eol=lf
