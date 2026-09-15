@@ -7,4 +7,10 @@
     <AssemblyName>Toaster</AssemblyName>
     <ApplicationIcon>..\..\assets\Toaster.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ApplicationIcon only brands the executable. Embedding the same file lets the
+         form set its own window, taskbar and tray icon without probing the exe. -->
+    <EmbeddedResource Include="..\..\assets\Toaster.ico" LogicalName="Toaster.ico" />
+  </ItemGroup>
 </Project>

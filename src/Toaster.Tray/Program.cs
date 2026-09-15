@@ -77,12 +77,27 @@ sealed class MainForm : Form
     };
 
     private readonly HttpClient _http = new() { BaseAddress = new Uri("http://127.0.0.1:47321"), Timeout = TimeSpan.FromMinutes(10) };
+    private readonly Icon _appIcon = LoadAppIcon();
+    private readonly Icon _trayIcon;
     private readonly NotifyIcon _notify;
     private bool _reallyExit;
+
+    /// <summary>
+    /// The mark ships as an embedded multi-resolution icon, so the window, the taskbar
+    /// and the tray all draw the frame that fits rather than rescaling one size.
+    /// </summary>
+    private static Icon LoadAppIcon()
+    {
+        using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("Toaster.ico");
+        if (stream is not null) return new Icon(stream);
+        return Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application;
+    }
 
     public MainForm()
     {
         Text = "Toaster";
+        Icon = _appIcon;
+        ShowIcon = true;
         Width = 880;
         Height = 600;
         MinimumSize = new Size(720, 520);
@@ -93,10 +108,11 @@ sealed class MainForm : Form
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open Toaster", null, (_, _) => ShowFromTray());
         menu.Items.Add("Exit", null, (_, _) => { _reallyExit = true; _notify!.Visible = false; Close(); });
+        _trayIcon = new Icon(_appIcon, SystemInformation.SmallIconSize);
         _notify = new NotifyIcon
         {
             Text = "Toaster",
-            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application,
+            Icon = _trayIcon,
             Visible = true,
             ContextMenuStrip = menu
         };
@@ -388,7 +404,7 @@ sealed class MainForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _notify.Dispose(); _http.Dispose(); }
+        if (disposing) { _notify.Dispose(); _trayIcon.Dispose(); _appIcon.Dispose(); _http.Dispose(); }
         base.Dispose(disposing);
     }
 }
